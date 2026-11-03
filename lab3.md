@@ -2,13 +2,14 @@
 
 | Item | Value |
 |---|---|
-| **VM** (the machine that shares the folder) | Win10 VM, IP `172.16.108.164` |
+| **VM** (the machine that shares the folder) | Win10 VM, IP **`<VM-IP>`** (changes each time, find it in Step 7) |
 | **HOST** (your own PC, the one that connects) | Logged in as `S11032077`, no admin rights |
 | Share name | `shared` → `C:\shared` on the VM |
 | Share account (exists on the VM) | `shareuser` / `Pass1234` |
 
 > **🖥️ VM** = type it inside the virtual machine
 > **💻 HOST** = type it on your own computer
+> **`<VM-IP>`** = the VM's current IP address, e.g. `172.16.108.164`. It may be different every time you start the VM.
 
 ---
 
@@ -22,8 +23,8 @@
 | 4 | 🖥️ **VM** | cmd **as Administrator** | Enable SMB-In firewall rules |
 | 5 | 🖥️ **VM** | cmd **as Administrator** | Create `shareuser` account |
 | 6 | 🖥️ **VM** | cmd **as Administrator** | Give `shareuser` folder permissions |
-| 7 | 🖥️ **VM** | cmd **as Administrator** | Verify share, get name and IP |
-| 8 | 💻 **HOST** | normal cmd | Clear old connections |
+| 7 | 🖥️ **VM** | cmd **as Administrator** | Verify share, **find the VM's IP** |
+| 8 | 💻 **HOST** | normal cmd | **Save the VM's IP** and clear old connections |
 | 9 | 💻 **HOST** | normal cmd | Connect to the share as `shareuser` |
 | 10 | 💻 **HOST** | normal cmd | Test access |
 | 11 | 💻 **HOST** | normal cmd | (Optional) Map as drive Z: |
@@ -46,7 +47,7 @@ Creates the folder on the VM. If it says it already exists, ignore it.
 ```cmd
 net share shared=C:\shared /grant:Everyone,FULL
 ```
-Publishes the VM's `C:\shared` on the network as `\\172.16.108.164\shared`. `/grant:Everyone,FULL` sets the **share permissions** so any authenticated user can read and write. If it says the share already exists, it's already shared.
+Publishes the VM's `C:\shared` on the network as `\\<VM-IP>\shared`. `/grant:Everyone,FULL` sets the **share permissions** so any authenticated user can read and write. If it says the share already exists, it's already shared.
 
 ### Step 3 (🖥️ VM): Put some data in it
 ```cmd
@@ -76,7 +77,7 @@ The VM checks **two permission layers**:
 
 Both must allow access. `F` is full control. `(OI)(CI)` applies it to all files and subfolders.
 
-### Step 7 (🖥️ VM): Verify and get the VM's details
+### Step 7 (🖥️ VM): Verify and find the VM's IP
 ```cmd
 net share shared
 hostname
@@ -86,7 +87,12 @@ ipconfig
 |---|---|
 | `net share shared` | Confirms the share exists on the VM |
 | `hostname` | Shows the VM's computer name (needed if Step 9 fails) |
-| `ipconfig` | Shows the VM's IP address (should be `172.16.108.164`) |
+| `ipconfig` | Shows the VM's IP address. **Write it down**, this is your `<VM-IP>` |
+
+In the `ipconfig` output, look for **IPv4 Address** under the network adapter (usually *Ethernet0*), for example:
+```
+IPv4 Address. . . . . . . . . . . : 172.16.108.164
+```
 
 ✅ **VM setup is done. Switch to your host.**
 
@@ -97,17 +103,21 @@ ipconfig
 > Open a **normal Command Prompt** on your own PC (no admin needed):
 > Start → type `cmd` → **Command Prompt**
 
-### Step 8 (💻 HOST): Clear any old connections
+### Step 8 (💻 HOST): Save the VM's IP and clear old connections
 ```cmd
+set VMIP=172.16.108.164
 net use * /delete /y
 ```
-Removes cached connections and credentials on your host from earlier failed attempts.
+- `set VMIP=...` stores the VM's IP in a variable. **Replace `172.16.108.164` with the IP you found in Step 7.** Every command below uses `%VMIP%`, so you only type the IP once.
+- `net use * /delete /y` removes cached connections and credentials from earlier failed attempts.
+
+> `VMIP` only lasts for **this cmd window**. If you open a new window, run `set VMIP=...` again. Check it with `echo %VMIP%`.
 
 ### Step 9 (💻 HOST): Connect using the VM account
 ```cmd
-net use \\172.16.108.164\shared /user:172.16.108.164\shareuser Pass1234
+net use \\%VMIP%\shared /user:%VMIP%\shareuser Pass1234
 ```
-Your host logs in to the VM's share as `shareuser`. The `172.16.108.164\` prefix tells Windows it's a **local account on the VM**, not on your host.
+Your host logs in to the VM's share as `shareuser`. The `%VMIP%\` prefix in `/user:` tells Windows it's a **local account on the VM**, not on your host.
 
 Expected output: `The command completed successfully.`
 
@@ -115,19 +125,21 @@ Expected output: `The command completed successfully.`
 
 ### Step 10 (💻 HOST): Test access
 ```cmd
-net view \\172.16.108.164
-dir \\172.16.108.164\shared
-type \\172.16.108.164\shared\test.txt
+ping %VMIP%
+net view \\%VMIP%
+dir \\%VMIP%\shared
+type \\%VMIP%\shared\test.txt
 ```
 | Command | Purpose |
 |---|---|
+| `ping` | Checks the host can reach the VM on the network |
 | `net view` | Lists the shares on the VM |
 | `dir` | Lists the files in the VM's shared folder |
 | `type` | Prints the contents of `test.txt` from the VM |
 
 ### Step 11 (💻 HOST, optional): Map it as a drive
 ```cmd
-net use Z: \\172.16.108.164\shared /user:172.16.108.164\shareuser Pass1234
+net use Z: \\%VMIP%\shared /user:%VMIP%\shareuser Pass1234
 ```
 The VM's share appears as drive **Z:** in File Explorer on your host.
 
@@ -156,8 +168,8 @@ Expected output: `There are no entries in the list.`
 ## How It Fits Together
 
 ```
- 💻 HOST (S11032077)                         🖥️ VM (172.16.108.164)
- ───────────────────                         ──────────────────────
+ 💻 HOST (S11032077)                         🖥️ VM (<VM-IP>)
+ ───────────────────                         ───────────────
  net use / dir / type  ──SMB port 445──►  Firewall SMB-In allowed  (Step 4)
    (Steps 8–12)                                    │
                                           Login as shareuser       (Step 5)
@@ -175,8 +187,9 @@ Expected output: `There are no entries in the list.`
 
 | Error (seen on 💻 HOST) | Meaning | Fix |
 |---|---|---|
-| **System error 53** | Network path not found | 🖥️ VM firewall or network blocking. Check Step 4, and ping the VM from the host |
+| **System error 53** | Network path not found | Wrong IP, or 🖥️ VM firewall blocking. Re-check the IP with `ipconfig` (Step 7), then `ping %VMIP%`, then Step 4 |
 | **System error 5** | Access is denied | Login or permissions wrong. Check 🖥️ Steps 5 and 6, and 💻 Step 9 |
 | **System error 86** | Incorrect password | Re-check the password used in 💻 Step 9 |
 | **System error 1219** | Multiple connections to same server | Run 💻 Step 8 again |
+| **`\\%VMIP%` not found** | Variable not set in this window | Run `set VMIP=<VM-IP>` again (💻 Step 8) |
 | **Guest access blocked** | Host blocks unauthenticated guest logons | Use the account method (🖥️ Step 5 and 💻 Step 9), not guest |
