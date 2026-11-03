@@ -98,6 +98,24 @@ net use Z: \\172.16.108.164\shared /user:172.16.108.164\shareuser Pass1234
 ```
 The share appears as drive **Z:** in File Explorer.
 
+### Step 12: Remove the mapped drive / disconnect
+```cmd
+net use Z: /delete
+```
+Removes the **Z:** drive mapping. If files are open and it asks to confirm, add `/y`:
+```cmd
+net use Z: /delete /y
+```
+To remove **all** mapped drives and connections to the VM at once:
+```cmd
+net use * /delete /y
+```
+Confirm nothing is left:
+```cmd
+net use
+```
+Expected output: `There are no entries in the list.`
+
 ---
 
 ## How It Fits Together
